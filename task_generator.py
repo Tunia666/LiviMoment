@@ -51,8 +51,57 @@ class TaskGenerator:
 """)
 
     def generate_task_with_llm(self, topic: str) -> dict:
-        """Generate a task using GigaChat API based on the lesson topic"""
-        prompt = f"""
+        # Специальная обработка: если тема содержит 'переменные' и 'тип' и 'ввод', генерировать только одно мини-задание
+        if "переменные" in topic.lower() and "тип" in topic.lower() and "ввод" in topic.lower():
+            prompt = f"""
+Сгенерируй ОДНО мини-задание по теме: {topic}
+Задание должно быть в формате JSON:
+{{
+    "title": "Название мини-задания",
+    "description": "Описание мини-задания",
+    "requirements": ["список требований"],
+    "examples": [
+        {{"input": "пример входных данных", "output": "пример выходных данных"}}
+    ],
+    "steps": ["шаги выполнения"]
+}}
+Важно: задание должно быть самостоятельной небольшой задачей на преобразование типов или форматированный вывод.
+"""
+            messages = [self.system_prompt, HumanMessage(content=prompt)]
+            response = self.llm.invoke(messages)
+            try:
+                task_data = json.loads(response.content)
+                if not task_data.get('examples') or not isinstance(task_data['examples'], list) or len(task_data['examples']) == 0:
+                    task_data['examples'] = [
+                        {'input': 'test', 'output': 'test'}
+                    ]
+                return task_data
+            except Exception as e:
+                print(f"Error parsing task data: {e}")
+                return {
+                    "title": f"Мини-задание по теме: {topic}",
+                    "description": "Создать программу, демонстрирующую понимание темы",
+                    "requirements": [
+                        "Создать отдельный файл для решения",
+                        "Добавить документацию",
+                        "Протестировать на различных входных данных",
+                        "Следовать PEP 8"
+                    ],
+                    "examples": [
+                        {
+                            "input": "test",
+                            "output": "test"
+                        }
+                    ],
+                    "steps": [
+                        "Создать новый файл с расширением .py",
+                        "Написать необходимый код",
+                        "Протестировать программу",
+                        "Убедиться в корректности работы"
+                    ]
+                }
+        else:
+            prompt = f"""
 Сгенерируй задание по теме: {topic}
 
 Задание должно быть в формате JSON:
@@ -71,41 +120,46 @@ class TaskGenerator:
 
 Важно:
 1. Задание должно быть связано с темой урока
-2. Должны быть конкретные примеры входных и выходных данных
+2. Должны быть конкретные примеры входных и выходных данных (даже если задача теоретическая, добавь хотя бы один фиктивный пример input/output)
 3. Требования должны быть четкими и выполнимыми
 4. Шаги должны быть понятными и последовательными
 """
-        messages = [self.system_prompt, HumanMessage(content=prompt)]
-        response = self.llm.invoke(messages)
-        
-        try:
-            task_data = json.loads(response.content)
-            return task_data
-        except Exception as e:
-            print(f"Error parsing task data: {e}")
-            # Return a default task if parsing fails
-            return {
-                "title": f"Задание по теме: {topic}",
-                "description": "Создать программу, демонстрирующую понимание темы",
-                "requirements": [
-                    "Создать отдельный файл для решения",
-                    "Добавить документацию",
-                    "Протестировать на различных входных данных",
-                    "Следовать PEP 8"
-                ],
-                "examples": [
-                    {
-                        "input": "Пример входных данных",
-                        "output": "Пример выходных данных"
-                    }
-                ],
-                "steps": [
-                    "Создать новый файл с расширением .py",
-                    "Написать необходимый код",
-                    "Протестировать программу",
-                    "Убедиться в корректности работы"
-                ]
-            }
+            messages = [self.system_prompt, HumanMessage(content=prompt)]
+            response = self.llm.invoke(messages)
+            
+            try:
+                task_data = json.loads(response.content)
+                # Если нет examples или они пустые, добавляем фиктивный пример
+                if not task_data.get('examples') or not isinstance(task_data['examples'], list) or len(task_data['examples']) == 0:
+                    task_data['examples'] = [
+                        {'input': 'test', 'output': 'test'}
+                    ]
+                return task_data
+            except Exception as e:
+                print(f"Error parsing task data: {e}")
+                # Return a default task if parsing fails
+                return {
+                    "title": f"Задание по теме: {topic}",
+                    "description": "Создать программу, демонстрирующую понимание темы",
+                    "requirements": [
+                        "Создать отдельный файл для решения",
+                        "Добавить документацию",
+                        "Протестировать на различных входных данных",
+                        "Следовать PEP 8"
+                    ],
+                    "examples": [
+                        {
+                            "input": "test",
+                            "output": "test"
+                        }
+                    ],
+                    "steps": [
+                        "Создать новый файл с расширением .py",
+                        "Написать необходимый код",
+                        "Протестировать программу",
+                        "Убедиться в корректности работы"
+                    ]
+                }
 
     def generate_task_for_lesson(self, lesson: dict) -> dict:
         """Generate a task based on the lesson topic using GigaChat API"""
