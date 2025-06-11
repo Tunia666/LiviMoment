@@ -1,0 +1,28 @@
+{
+    "users": [
+        {
+            "telegram_username": "ivanlevitskii",
+            "full_name": "Левицкий Крут",
+            "password": "123",
+            "role": "admin"
+        },
+        {
+            "telegram_username": "akupin",
+            "full_name": "Купин Андрей Владимирович",
+            "password": "22",
+            "role": "teacher"
+        },
+        {
+            "telegram_username": "orangejuice27th",
+            "full_name": "Прилепская Татьяна Владимировна",
+            "password": "1",
+            "role": "student"
+        },
+        {
+            "telegram_username": "bobrulia",
+            "full_name": "Боброва Татьяна Письевна",
+            "password": "123",
+            "role": "student"
+        }
+    ]
+} 
