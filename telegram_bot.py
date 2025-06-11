@@ -10,6 +10,7 @@ from langchain_gigachat import GigaChat
 from langchain_core.messages import SystemMessage, HumanMessage
 import subprocess
 import tempfile
+from telegram.error import NetworkError, TelegramError
 
 # Загрузка переменных окружения
 load_dotenv()
@@ -27,6 +28,7 @@ lesson_manager = LessonManager("ktp.json")
 # Словари для хранения данных
 user_solutions = {}
 student_registrations = {}  # {user_id: {lesson_date: registration_data}}
+user_stats = {}  # user_id: {'total': 0, 'success': 0}
 
 # Пример теста (можно заменить на генерацию или загрузку из файла)
 test_questions = [
@@ -223,6 +225,28 @@ async def handle_solution(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         })
     os.unlink(tmp_path)
 
+    # === СТАТИСТИКА ===
+    if user_id not in user_stats:
+        user_stats[user_id] = {'total': 0, 'success': 0}
+    user_stats[user_id]['total'] += 1
+    if all(res['success'] for res in check_results):
+        user_stats[user_id]['success'] += 1
+
+    # === ОЦЕНКА ===
+    total = user_stats[user_id]['total']
+    success = user_stats[user_id]['success']
+    percent = round(success / total * 100) if total else 0
+    if percent >= 90:
+        grade = 5
+    elif percent >= 75:
+        grade = 4
+    elif percent >= 50:
+        grade = 3
+    elif percent >= 30:
+        grade = 2
+    else:
+        grade = 1
+
     # Формируем отчет
     report = "\n\nРезультаты автоматической проверки:\n"
     for i, res in enumerate(check_results, 1):
@@ -233,6 +257,7 @@ async def handle_solution(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         if res['error']:
             report += f"Ошибка выполнения: {res['error']}\n"
         report += f"Результат: {'✅ Успех' if res['success'] else '❌ Ошибка'}\n"
+    report += f"\n📊 Ваша текущая оценка: {grade}/5 (успехов: {success} из {total}, {percent}%)"
     
     # Отправляем отчет пользователю
     keyboard = [
@@ -432,6 +457,40 @@ async def test_answer_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
         )
         del user_tests[user_id]
 
+async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    user_id = update.effective_user.id
+    stats = user_stats.get(user_id, {'total': 0, 'success': 0})
+    total = stats['total']
+    success = stats['success']
+    percent = round(success / total * 100) if total else 0
+    if percent >= 90:
+        grade = 5
+    elif percent >= 75:
+        grade = 4
+    elif percent >= 50:
+        grade = 3
+    elif percent >= 30:
+        grade = 2
+    else:
+        grade = 1
+    await update.message.reply_text(
+        f'📊 Ваша статистика:\n'
+        f'Всего попыток: {total}\n'
+        f'Успешных решений: {success}\n'
+        f'Процент успеха: {percent}%\n'
+        f'Ваша оценка: {grade}/5'
+    )
+
+async def error_handler(update, context):
+    try:
+        raise context.error
+    except NetworkError as e:
+        logger.error(f"Network error: {e}")
+    except TelegramError as e:
+        logger.error(f"Telegram error: {e}")
+    except Exception as e:
+        logger.error(f"Unexpected error: {e}")
+
 def main() -> None:
     """Запуск бота"""
     # Используем токен напрямую, так как он уже известен
@@ -446,6 +505,8 @@ def main() -> None:
     application.add_handler(CallbackQueryHandler(test_answer_handler, pattern=r'^test_answer_'))
     application.add_handler(CallbackQueryHandler(button_handler))
     application.add_handler(MessageHandler(filters.TEXT | filters.Document.ALL, handle_solution))
+    application.add_handler(CommandHandler("stats", stats_command))
+    application.add_error_handler(error_handler)
     
     # Запускаем бота
     application.run_polling(allowed_updates=Update.ALL_TYPES)
